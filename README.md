@@ -8,7 +8,7 @@ Try it online or download one HTML file to use offline, with no installation or 
 
 **[Try it online](https://profrino.github.io/laserscan-lab/)** · **[Download the offline app](https://github.com/ProfRino/laserscan-lab/releases/latest/download/LaserScan-Lab.html)**
 
-<img src="assets/demo.gif" alt="Animated LaserScan Lab demonstration: spinning laser and three sequential room scans connected by reference balls" width="100%">
+<img src="assets/demo.gif?v=2" alt="Animated LaserScan Lab demonstration: spinning laser and three sequential room scans connected by reference balls" width="100%">
 
 > **Educational model:** this application demonstrates scanning principles. It is not a calibrated instrument simulator or a real ICP registration solver.
 
