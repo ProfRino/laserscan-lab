@@ -52,18 +52,37 @@ for(const [name,button,n] of [['empty','btnScEmpty',0],['columns','btnScCols',6]
 }
 for(const name of ['res','noise','occl','place','reg','corridor']){
   test('lesson '+name+' and registration lifecycle',async({page})=>{
+    if(name==='corridor') test.setTimeout(120000);
     await room(page); await page.locator('[data-l='+name+']').click(); await complete(page);
     expect(await page.evaluate(()=>lab.snapshot().count)).toBeGreaterThan(1000);
     if(name==='corridor'){
-      await expect(page.locator('#regPad')).toBeVisible();
-      expect(await page.evaluate(()=>lab.snapshot().shared)).toBe(3);
+      await expect(page.locator('#regTitle')).toContainText('Left room');
+      expect(await page.evaluate(()=>lab.stations.length)).toBe(1);
+      const balls = await page.evaluate(()=>lab.obstacles.filter(o=>o.kind==='sphere').map(o=>({x:o.mesh.position.x,z:o.mesh.position.z,h:o.solids.find(s=>s.s==='sp').dy,poles:o.solids.filter(s=>s.s==='c').length})));
+      expect(balls).toHaveLength(6);
+      for (const ball of balls) { expect(ball.h).toBe(0.16); expect(ball.poles).toBe(0); }
+      for (let a=0;a<balls.length;a++) for(let b=a+1;b<balls.length;b++) {
+        expect(Math.hypot(balls[a].x-balls[b].x,balls[a].z-balls[b].z)).toBeGreaterThan(1.2);
+      }
+      const first = await page.evaluate(()=>lab.snapshot(true));
+      await page.locator('#regDone').click(); await complete(page);
+      await expect(page.locator('#regTitle')).toContainText('Corridor');
+      const second = await page.evaluate(()=>lab.snapshot(true));
+      expect(second.counts[0]).toBe(first.counts[0]);
+      expect(second.points.slice(0,100)).toEqual(first.points.slice(0,100));
+      expect(second.targetPairs.find(p=>p.a===0&&p.b===1).count).toBe(3);
+      await page.locator('#regDone').click(); await complete(page);
+      await expect(page.locator('#regTitle')).toContainText('Right room');
+      const third = await page.evaluate(()=>lab.snapshot(true));
+      expect(third.counts.slice(0,2)).toEqual(second.counts.slice(0,2));
+      expect(third.points.slice(0,100)).toEqual(first.points.slice(0,100));
+      expect(third.counts[2]).toBeGreaterThan(1000);
+      expect(third.targetPairs.find(p=>p.a===1&&p.b===2).count).toBe(3);
+      expect(third.targetPairs.find(p=>p.a===0&&p.b===2).count).toBeLessThan(3);
+      expect(third.networkConnected).toBe(true);
+      await page.screenshot({path:'test-results/three-room-survey.png'});
       await page.locator('#regDone').click();
-      await expect(page.locator('#regPad')).toBeVisible();
-      await page.locator('[data-r="x+"]').click();
-      await page.locator('#regAuto').click();
-      await expect(page.locator('#regErr')).toContainText('Registered',{timeout:10000});
-      await page.locator('#regDone').click();
-      await expect(page.locator('#regPad')).toBeHidden();
+      expect(await page.evaluate(()=>lab.snapshot().chainStage)).toBe('done');
     } else await expect(page.locator('#lessonCard')).toBeVisible();
   });
 }
@@ -81,6 +100,8 @@ test('analytic occlusion: wall, column, tabletop, sphere, doorway, nearest retur
     out.sphere=cast('sphere',0,0,[0,1.44,-4],[0,0,1]);
     lab.clearObstacles(true);lab.setStations([[0,0]]);lab.buildColliders();
     out.self=lab.cast(0,1.67,0,0,0,1,0);
+    lab.setStations([[0,0],[0,2]]);lab.buildColliders();
+    out.future=lab.cast(0,1.67,0,0,0,1,0);
     lab.setStructure([{cx:0,cz:0,sx:2,sz:.2}]);lab.buildColliders();
     out.blocked=lab.cast(0,1,-4,0,0,1,0);
     out.open=lab.cast(2,1,-4,0,0,1,0);
@@ -92,6 +113,7 @@ test('analytic occlusion: wall, column, tabletop, sphere, doorway, nearest retur
   expect(results.under.t).toBeCloseTo(9.5,5);
   expect(results.sphere.t).toBeCloseTo(3.84,5);
   expect(results.self.t).toBeCloseTo(5.5,5);
+  expect(results.future.t).toBeCloseTo(5.5,5);
   expect(results.blocked.t).toBeCloseTo(3.9,5);
   expect(results.open.t).toBeCloseTo(9.5,5);
 });

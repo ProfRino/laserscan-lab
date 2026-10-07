@@ -17,4 +17,5 @@ for (const match of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) new (require
 if (/<(?:script|link)\b[^>]*(?:src|href)=/i.test(html)) throw Error('Standalone build still has external assets');
 fs.writeFileSync('LaserScan-Lab.html',html);
 fs.writeFileSync('LaserScan-Lab-v1.0.1.html',html);
+fs.writeFileSync('LaserScan-Lab-v1.0.2.html',html);
 console.log('Created LaserScan-Lab.html ('+Math.round(Buffer.byteLength(html)/1024)+' KiB): open directly, no server required.');

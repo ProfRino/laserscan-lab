@@ -16,7 +16,7 @@ The release build was tested on 7 October 2026. All 11 standalone tests passed, 
 | Scan state | Edits invalidate captured data, station removal during scanning, auto-rescan disabled, partial stop, invalid scanner origin |
 | Display | Orbit, top and scanner views; four color modes; laser and gap switches; range control endpoints |
 | Interaction | Tripod drag via real pointer events; add/remove/clear objects; three-station limit; keyboard-operated switches; mobile viewport |
-| Registration | Three shared targets in corridor preset, manual nudge, reveal alignment, block premature completion, finish exercise |
+| Registration | Two three-target doorway links; sequential acquisition; third-room acquisition preserves the first two clouds; all three scans form a connected chain |
 | Export | Download completed XYZ; validate row count, six columns, finite coordinates and RGB bounds |
 | Resources | Repeated preset and height changes release old GPU geometry |
 | Limits | 1,200,000-point cap with three high-resolution stations; actionable missing-WebGL message |
@@ -33,7 +33,7 @@ Run `npm run build` followed by `npm test` to reproduce. Browser screenshots and
 - Added origin validation, footprint-aware object bounds, GPU resource disposal, and early stop at the point cap.
 - Hid the active scanner housing in scanner-camera view and suppressed false hit markers at the range limit.
 - Reported shared targets separately for each station pair and checked actual target identity.
-- Renamed the simulated alignment action so it does not claim to run ICP; prevented export of incomplete scans or unfinished alignment exercises.
+- Removed artificial cloud offsets and manual alignment. Three sequential acquisitions preserve earlier clouds and use two reference-target links; unfinished surveys cannot be exported.
 - Added accessible switches, input labels, clearer scan status, mobile layout refinements and training material.
 - Bundled all runtime dependencies into one offline HTML file and retained Three.js licensing information.
 

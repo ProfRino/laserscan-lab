@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>LaserScan Lab 1.0.1 — Point-Cloud Simulator</title>
+<title>LaserScan Lab 1.0.2 — Point-Cloud Simulator</title>
 <link rel="stylesheet" href="/src/styles.css">
 </head>
 <body>
-<div id="startupNotice" class="startup-error" role="status"><b>LaserScan Lab 1.0.1 — starting…</b><p>If this message stays visible, the application script has not started. Reopen this file in a browser with JavaScript and WebGL enabled.</p></div>
+<div id="startupNotice" class="startup-error" role="status"><b>LaserScan Lab 1.0.2 — starting…</b><p>If this message stays visible, the application script has not started. Reopen this file in a browser with JavaScript and WebGL enabled.</p></div>
 <div id="scene"></div>
 
 <div id="topbar">
@@ -118,7 +118,7 @@
       <button data-l="occl">Occlusion<em>scan shadows</em></button>
       <button data-l="place">Placement<em>beat the shadows</em></button>
       <button data-l="reg">Targets<em>spheres &amp; markers</em></button>
-      <button data-l="corridor">Registration lab<em>rooms + corridor</em></button>
+      <button data-l="corridor">Three-scan survey<em>cover both rooms</em></button>
     </div>
   </details>
 
@@ -133,8 +133,8 @@
 <p><b>Occlusion exercise:</b> scan a wall and table, enable Cloud only and gap markers, then add a second station on the other side. Compare visibility and overlap before and after.</p>
 <p><b>Check your understanding:</b> Why does doubling range double spacing? Why can finer resolution not see behind a wall? Why do three collinear targets make registration unstable?</p>
 <p>Drag to orbit, right-drag to pan, scroll to zoom. In Top view drag to pan. Drag tripods or objects to move them. Touch: one finger rotates; two fingers pan and zoom.</p>
-<p>Coverage samples the outer room shell on a 0.5 m grid. It estimates geometric visibility, not actual point density, furniture coverage, or registration quality. Noise and grazing-angle dropout are random. Other stations are approximate cylindrical occluders.</p>
-<p>The alignment exercise uses a known translation and yaw. “Show correct alignment” reveals that solution; this is not a real ICP solver or a six-degree-of-freedom registration.</p>
+<p>Coverage samples the outer room shell on a 0.5 m grid. It estimates geometric visibility, not actual point density, furniture coverage, or registration quality. Noise and grazing-angle dropout are random. Stations are successive positions of one scanner and do not block each other. The registration lab uses six fixed targets to connect both rooms through the corridor.</p>
+<p>The multi-room lesson shows how fixed reference balls connect sequential scans. It keeps the simulated coordinates aligned to illustrate the survey workflow; it does not fit targets or run a registration solver.</p>
 </details><div class="foot">Educational model: single-return laser, ideal reflectivity, no multipath or mixed pixels. Field time assumes ≈50 k pts/s plus 3 min setup per station.</div>
 </aside>
 
@@ -151,6 +151,7 @@
   <div id="hudTgtWrap" style="display:none">
     <div class="lbl" style="margin-top:7px">shared targets by station pair</div>
     <div id="hudTgt" style="font-size:15px;font-weight:650"></div>
+    <div id="hudLinks" class="note"></div>
   </div>
   <div id="hudForm"></div>
   <div id="hudWarn">Point budget reached — cloud capped.</div>
@@ -172,14 +173,11 @@
 </div>
 <div id="lessonCard"><button id="lClose" aria-label="Close lesson">×</button><h4 id="lTitle"></h4><p id="lBody"></p></div>
 <div id="regPad">
-  <div class="eyebrow">Align station 2</div>
-  <div class="rgrid">
-    <button data-r="ry+">⟲</button><button data-r="z-">▲</button><button data-r="ry-">⟳</button>
-    <button data-r="x-">◀</button><button data-r="z+">▼</button><button data-r="x+">▶</button>
-  </div>
+  <div class="eyebrow" id="regTitle">Align station 2</div>
+
   <div id="regErr"></div>
+  <p id="regHint" class="note" style="max-width:340px"></p>
   <div class="btnrow" style="margin-top:9px;justify-content:center">
-    <button class="chipbtn" id="regAuto">Show correct alignment</button>
     <button class="chipbtn" id="regDone">Done</button>
   </div>
 </div>

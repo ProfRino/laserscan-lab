@@ -216,15 +216,17 @@ function addObstacle(kind, x, z, opts, silent) {
       slab(0.07, 0.68, 0.07, l[0], 0.34, l[1], wood));
     label = 'Table ' + (++obCounter.table);
   } else if (kind === 'sphere') {
-    const base = new T.Mesh(new T.CylinderGeometry(0.12, 0.14, 0.04, 16), grey);
-    base.position.y = 0.02; g.add(base);
-    const th = (opts && opts.h) || 1.44;
-    const pole = new T.Mesh(new T.CylinderGeometry(0.02, 0.02, th - 0.12, 10), grey);
-    pole.position.y = (th - 0.12) / 2; g.add(pole);
+    const th = opts?.h ?? 1.44;
+    if (th > 0.16) {
+      const base = new T.Mesh(new T.CylinderGeometry(0.12, 0.14, 0.04, 16), grey);
+      base.position.y = 0.02; g.add(base);
+      const pole = new T.Mesh(new T.CylinderGeometry(0.02, 0.02, th - 0.16, 10), grey);
+      pole.position.y = (th - 0.16) / 2; g.add(pole);
+      solids.push({ s: 'c', dx: 0, dz: 0, r: 0.02, y1: th - 0.16 });
+    }
     const sph = new T.Mesh(new T.SphereGeometry(0.16, 20, 16),
       new T.MeshStandardMaterial({ color: 0xf4f4f6, roughness: 0.35 }));
     sph.position.y = th; g.add(sph);
-    solids.push({ s: 'c', dx: 0, dz: 0, r: 0.02, y1: th - 0.16 });
     solids.push({ s: 'sp', dy: th, r: 0.16 });
     label = 'Target ' + (++obCounter.sphere);
   } else {
@@ -406,9 +408,7 @@ function buildColliders() {
     colliders.push({ kind: 0, minx: w.cx - w.sx / 2, maxx: w.cx + w.sx / 2, miny: 0, maxy: RH,
       minz: w.cz - w.sz / 2, maxz: w.cz + w.sz / 2, tag: -1 });
   }
-  stations.forEach((s, i) => {
-    colliders.push({ kind: 1, cx: s.x, cz: s.z, r: 0.27, y1: state.height + 0.18, tag: i });
-  });
+  // Stations are successive positions of one instrument, not simultaneous solids.
 }
 function castAll(ox, oy, oz, dx, dy, dz, exSt) {
   let bt = Infinity, nx = 0, ny = 0, nz = 0;
@@ -482,6 +482,8 @@ function updateRoomBeam(col) {
 let job = null, rescanTimer = null;
 let scanStatus = 'Ready';
 function invalidateScan() {
+  chainStage = null;
+
   if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = null; }
   job = null;
   pendingRegGame = false;
@@ -535,7 +537,7 @@ function scanColumn(si, k, n, record) {
     count++;
   }
 }
-function startScan(animated) {
+function startScan(animated, appendFrom = 0) {
   if (!stations.length || state.mode !== 'room') return;
   endRegGame();
   if (rescanTimer) { clearTimeout(rescanTimer); rescanTimer = null; }
@@ -549,11 +551,14 @@ function startScan(animated) {
   }));
   if (invalid >= 0) { invalidateScan(); scanStatus = 'Move station ' + (invalid+1) + ' out of the obstacle'; hudLive(); toast(scanStatus); return; }
   buildElevations();
-  count = 0; uploaded = 0; stCounts = [0, 0, 0];
-  pGeom.setDrawRange(0, 0);
+  if (!appendFrom) {
+    count = 0; uploaded = 0; stCounts = [0, 0, 0];
+    pGeom.setDrawRange(0, 0);
+    if (chainStage !== 'first') { chainStage = null;  }
+  }
   const n = Math.max(8, Math.round(360 / state.hStep));
   const cols = [];
-  for (let si = 0; si < stations.length; si++)
+  for (let si = appendFrom; si < stations.length; si++)
     for (let k = 0; k < n; k++) cols.push({ si, k, n });
   job = { cols, i: 0, animated };
   scanStatus = 'Scanning';
@@ -743,7 +748,7 @@ function computeCoverage() {
   $('hudOvWrap').style.display = showOv ? '' : 'none';
   if (showOv) $('hudOv').textContent = (100 * multi / valid).toFixed(1) + '%';
 }
-let lastShared = -1;
+let lastShared = -1, targetPairs = [], networkConnected = false;
 function targetAudit() {
   const spheres = obstacles.filter(o => o.kind === 'sphere');
   const wrap = $('hudTgtWrap');
@@ -768,13 +773,21 @@ function targetAudit() {
     pairs.forEach(pair => { if (visible.includes(pair.a) && visible.includes(pair.b)) pair.count++; });
   }
   lastShared = Math.min(...pairs.map(pair => pair.count));
+  targetPairs = pairs;
+  const connected = new Set([0]);
+  for (let pass = 0; pass < stations.length; pass++) for (const pair of pairs) {
+    if (pair.count >= 3 && (connected.has(pair.a) || connected.has(pair.b))) { connected.add(pair.a); connected.add(pair.b); }
+  }
+  networkConnected = connected.size === stations.length;
   wrap.style.display = '';
   $('hudTgt').textContent = pairs.map(pair => 'ST' + (pair.a+1) + '–' + (pair.b+1) + ': ' + pair.count + ' / ' + spheres.length).join(' · ');
+  $('hudLinks').textContent = networkConnected ? 'Target links connect all stations' : 'Target links incomplete (3 shared targets per link)';
 }
 
 /* ---------------- export ---------------- */
 function exportXYZ() {
-  if (job || regActive || !scanStatus.startsWith('Complete')) { toast('Complete a scan and finish alignment before exporting'); return; }
+  if (chainStage && chainStage !== 'done') { toast('Complete the three-scan survey before exporting'); return; }
+  if (job || regActive || !scanStatus.startsWith('Complete')) { toast('Complete the scan and survey before exporting'); return; }
   if (!count) { toast('Nothing to export — run a scan first'); return; }
   const parts = []; let buf = [];
   for (let i = 0; i < count; i++) {
@@ -1128,23 +1141,27 @@ const LESSONS = {
     }
   },
   corridor: {
-    title: 'Lesson 6 — Registration lab: two rooms + a corridor',
+    title: 'Lesson 6: cover both rooms and the corridor with three scans',
     structure: APARTMENT,
-    body: 'No single position sees this floor plan, so scans are chained and registered: registration finds the shift + rotation that merges coordinate systems. The rule: each target-based registration link needs at least THREE non-collinear shared targets — the HUD now counts them. Here all three spheres sit in the doorway sight-lines at different heights, so both stations capture them. After the scan Station 2 arrives misaligned: slide and rotate it until the spheres coincide, or press Show correct alignment to reveal the known solution (no ICP is performed). Move a sphere out of the overlap, rescan, and watch the counter fall below 3.',
+    body: 'One scanner visits the left room, corridor, then right room. Six floor-level balls form two links: three spread across each doorway, from the room into the corridor. Keep them fixed until the adjoining scans are captured. Scan the left room first, then the corridor, then the final room. The same fixed balls link adjacent scans. Station 1 does not need to see station 3. Extra targets avoid moving references between linked scans. Editing targets restarts measurement; it does not retroactively change an earlier scan.',
     apply() {
       clearObstacles(true);
-      addObstacle('sphere', -4.0, 0.9, { h: 1.5 }, true);
-      addObstacle('sphere', -3.8, 2.75, { h: 1.1 }, true);
-      addObstacle('sphere', -4.85, 1.35, { h: 1.9 }, true);
-      setStations([[-5.0, -2.2], [-4.0, 3.5]]);
-      Object.assign(state, { hStep: 0.8, vStep: 0.8, noise: 2, cutoff: 84, vfov: 135, maxRange: 30, colorMode: 'station', showGaps: false });
+      for (const side of [-1, 1]) {
+        addObstacle('sphere', side * 5.5, 1.2, { h: 0.16 }, true);
+        addObstacle('sphere', side * 4.0, 2.3, { h: 0.16 }, true);
+        addObstacle('sphere', side * 3.3, 3.3, { h: 0.16 }, true);
+      }
+      setStations([[-5.0, -2.2]]);
+      Object.assign(state, { hStep: 0.8, vStep: 0.8, height: 1.6, noise: 2, cutoff: 89, vfov: 160, maxRange: 30, colorMode: 'station', showGaps: false });
       pendingRegGame = true;
+      chainStage = 'first'; regStation = 0;
     }
   }
 };
 document.querySelectorAll('.lessons button').forEach(b => {
   b.addEventListener('click', () => {
     const L = LESSONS[b.dataset.l];
+    chainStage = null;
     endRegGame();
     pendingRegGame = false;
     if (job) { job = null; hideBeam(); }
@@ -1170,116 +1187,44 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-/* ---------------- registration lab (align two scans) ---------------- */
-let regActive = false, pendingRegGame = false, regAnim = null, regObjs = null;
-const regOff = { x: 0, z: 0, yaw: 0 };
-function makeRegCloud(pos, col, n) {
-  const g = new T.BufferGeometry();
-  g.setAttribute('position', new T.BufferAttribute(pos, 3));
-  g.setAttribute('color', new T.BufferAttribute(col, 3));
-  g.setDrawRange(0, n);
-  const pts = new T.Points(g, new T.PointsMaterial({ size: state.ptSize, vertexColors: true,
-    sizeAttenuation: true, map: DOT, alphaTest: 0.5 }));
-  const halo = new T.Points(g, new T.PointsMaterial({ size: state.ptSize * 1.55, color: 0x2b2723,
-    sizeAttenuation: true, map: DOT, alphaTest: 0.5 }));
-  pts.frustumCulled = false; halo.frustumCulled = false;
-  pts.raycast = function () {}; halo.raycast = function () {};
-  halo.renderOrder = 0; pts.renderOrder = 1;
-  return { g, pts, halo };
-}
+/* Sequential reference-target survey: no artificial displacement. */
+let regActive = false, pendingRegGame = false;
+let chainStage = null, regStation = 0;
 function startRegGame() {
-  if (regActive || stations.length < 2 || !count) return;
-  const s2 = stations[1], px = s2.x, pz = s2.z;
-  let nA = 0, nB = 0;
-  for (let i = 0; i < count; i++) { if (mSt[i] === 0) nA++; else nB++; }
-  if (!nA || !nB) return;
-  const pA = new Float32Array(nA * 3), cA = new Float32Array(nA * 3);
-  const pB = new Float32Array(nB * 3), cB = new Float32Array(nB * 3);
-  let a = 0, b = 0;
-  for (let i = 0; i < count; i++) {
-    const j = i * 3;
-    if (mSt[i] === 0) {
-      pA[a] = pPos[j]; pA[a + 1] = pPos[j + 1]; pA[a + 2] = pPos[j + 2];
-      cA[a] = pCol[j]; cA[a + 1] = pCol[j + 1]; cA[a + 2] = pCol[j + 2];
-      a += 3;
-    } else {
-      pB[b] = pPos[j] - px; pB[b + 1] = pPos[j + 1]; pB[b + 2] = pPos[j + 2] - pz;
-      cB[b] = pCol[j]; cB[b + 1] = pCol[j + 1]; cB[b + 2] = pCol[j + 2];
-      b += 3;
-    }
-  }
-  const A = makeRegCloud(pA, cA, nA);
-  const B = makeRegCloud(pB, cB, nB);
-  const grp = new T.Group();
-  grp.add(B.halo); grp.add(B.pts);
-  scene.add(A.halo); scene.add(A.pts); scene.add(grp);
-  regObjs = { A, B, grp, px, pz };
-  points.visible = false; pHalo.visible = false;
-  regOff.x = 0.55; regOff.z = -0.42; regOff.yaw = 4.5 * DEG;
-  regActive = true; regAnim = null;
-  applyRegOff();
+  if (!chainStage || !count) return;
+  regActive = true;
   $('lessonCard').style.display = 'none';
   $('regPad').style.display = 'block';
-  toast(lastShared >= 0 && lastShared < 3
-    ? '⚠ fewer than 3 shared targets — real software would struggle here'
-    : 'Station 2 came in misaligned — line it up');
-}
-function applyRegOff() {
-  if (!regObjs) return;
-  regObjs.grp.position.set(regObjs.px + regOff.x, 0, regObjs.pz + regOff.z);
-  regObjs.grp.rotation.y = regOff.yaw;
-  const tErr = Math.hypot(regOff.x, regOff.z);
-  const rErr = Math.abs(regOff.yaw) / DEG;
-  const good = tErr < 0.06 && rErr < 0.4;
-  if (good && (regOff.x || regOff.z || regOff.yaw)) {
-    regOff.x = 0; regOff.z = 0; regOff.yaw = 0; regAnim = null;
-    regObjs.grp.position.set(regObjs.px, 0, regObjs.pz);
-    regObjs.grp.rotation.y = 0;
-    toast('Registered — one cloud, one coordinate system');
-  }
-  $('regErr').innerHTML = (tErr < 0.06 && rErr < 0.4)
-    ? '<b style="color:#39d98a">Registered ✓</b>'
-    : 'misalignment: <b>' + tErr.toFixed(2) + ' m · ' + rErr.toFixed(1) + '°</b>';
+  const titles = {first:'1. Left room scanned',pair:'2. Corridor scanned',last:'3. Right room scanned'};
+  $('regTitle').textContent = titles[chainStage];
+  const shared = targetPairs.find(p => p.a === regStation - 1 && p.b === regStation)?.count || 0;
+  $('regErr').textContent = regStation === 0 ? 'Keep the three left-doorway balls fixed.' : shared + ' shared reference balls link stations ' + regStation + ' and ' + (regStation + 1) + '.';
+  $('regHint').textContent = chainStage === 'first'
+    ? 'Move the same scanner into the corridor. It must see the same three balls as the first scan, plus the next three at the right doorway.'
+    : chainStage === 'pair'
+      ? 'The left-doorway balls connect the first two scans. Keep the right-doorway balls fixed while moving the scanner into the final room.'
+      : 'The right-doorway balls connect this scan to the corridor. All three scans are now connected, even though the two rooms do not see each other.';
+  $('regDone').textContent = chainStage === 'first' ? 'Move scanner to corridor and scan' : chainStage === 'pair' ? 'Move scanner to last room and scan' : 'Finish survey';
 }
 function endRegGame() {
-  regAnim = null;
-  if (!regActive) return;
   regActive = false;
-  scene.remove(regObjs.A.pts); scene.remove(regObjs.A.halo); scene.remove(regObjs.grp);
-  [regObjs.A, regObjs.B].forEach(c => { c.g.dispose(); c.pts.material.dispose(); c.halo.material.dispose(); });
-  regObjs = null;
-  points.visible = true; pHalo.visible = true;
   $('regPad').style.display = 'none';
 }
-function regStep(k) {
-  if (!regActive) return;
-  regAnim = null;
-  const d = 0.05, r = 0.5 * DEG;
-  if (k === 'x-') regOff.x -= d; else if (k === 'x+') regOff.x += d;
-  else if (k === 'z-') regOff.z -= d; else if (k === 'z+') regOff.z += d;
-  else if (k === 'ry+') regOff.yaw += r; else if (k === 'ry-') regOff.yaw -= r;
-  applyRegOff();
-}
-document.querySelectorAll('#regPad [data-r]').forEach(btn => {
-  let iv = null;
-  const stop = () => { if (iv) { clearInterval(iv); iv = null; } };
-  btn.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    regStep(btn.dataset.r);
-    iv = setInterval(() => regStep(btn.dataset.r), 110);
-  });
-  btn.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); regStep(btn.dataset.r); } });
-  btn.addEventListener('pointerup', stop);
-  btn.addEventListener('pointerleave', stop);
-  btn.addEventListener('pointercancel', stop);
-});
-$('regAuto').addEventListener('click', () => {
-  if (!regActive || regAnim) return;
-  regAnim = { k: 0, n: 55, x: regOff.x, z: regOff.z, yaw: regOff.yaw };
-});
 $('regDone').addEventListener('click', () => {
-  if (Math.hypot(regOff.x, regOff.z) > 0.001 || Math.abs(regOff.yaw) > 0.001) { toast('Align the cloud first, or reveal the correct alignment'); return; }
+  if (!regActive || job) return;
+  if (regStation > 0 && !networkConnected) { toast('The reference-target link is incomplete. Restart the lesson to restore the target positions.'); return; }
   endRegGame();
+  if (chainStage === 'last') {
+    chainStage = 'done';
+    $('lTitle').textContent = 'Survey complete: room 1, corridor, room 2';
+    $('lBody').textContent = 'Red: first room. Green: corridor. Yellow: final room. Three fixed balls at each doorway connect the adjacent scans. All earlier points were preserved. Room-shell visibility: ' + $('hudCov').textContent + '. Toggle coverage gaps to inspect residual blind spots, or export the combined cloud.';
+    $('lessonCard').style.display = 'block';
+    return;
+  }
+  const next = chainStage === 'first' ? 1 : 2;
+  addStation(next === 1 ? 0 : 5, next === 1 ? 4.6 : -2.2, true);
+  regStation = next; chainStage = next === 1 ? 'pair' : 'last'; pendingRegGame = true;
+  startScan(true, next);
 });
 
 /* ================= PRINCIPLE SCENE — how a scanner works ================= */
@@ -1604,6 +1549,7 @@ function setMode(m) {
   $('btnMenu').parentElement.style.display = room ? '' : 'none';
   $('lessonCard').style.display = 'none';
   $('prCard').style.display = room ? 'none' : 'block';
+  updateLayout();
   document.querySelectorAll('#modeSeg button').forEach(b =>
     b.classList.toggle('on', b.dataset.mode === m));
   if (room && !roomVisited) {
@@ -1627,16 +1573,6 @@ function animate() {
     return;
   }
   if (job) stepJob();
-  if (regAnim && regActive) {
-    regAnim.k++;
-    const t = Math.min(1, regAnim.k / regAnim.n);
-    const e = 1 - Math.pow(1 - t, 3);
-    regOff.x = regAnim.x * (1 - e);
-    regOff.z = regAnim.z * (1 - e);
-    regOff.yaw = regAnim.yaw * (1 - e);
-    applyRegOff();
-    if (regAnim && t >= 1) regAnim = null;
-  }
   if (count > uploaded) {
     posAttr.updateRange.offset = uploaded * 3;
     posAttr.updateRange.count = (count - uploaded) * 3;
@@ -1654,6 +1590,9 @@ function animate() {
   }
   pGeom.setDrawRange(0, count);
   ctrlApply();
+  const activeStation = job ? job.cols[Math.min(job.i, job.cols.length - 1)].si : stations.length - 1;
+  stations.forEach((s, i) => { s.mesh.visible = !state.cloudOnly && (!(chainStage || job) || i === activeStation); });
+  markerGroup.visible = state.cloudOnly || !!chainStage;
   const povMesh = state.viewMode === 'pov' && stations[0]?.mesh;
   if (povMesh) povMesh.visible = false;
   renderer.render(scene, camera);
@@ -1676,8 +1615,10 @@ prSetStep(1);
 setMode('principle');
 animate();
 document.body.classList.add('app-ready');
-const updateLayout = () => document.documentElement.style.setProperty('--toolbar-bottom',
-  Math.ceil($('topbar').getBoundingClientRect().bottom + 10) + 'px');
+function updateLayout() {
+  document.documentElement.style.setProperty('--toolbar-bottom',
+    Math.ceil($('topbar').getBoundingClientRect().bottom + 10) + 'px');
+}
 new ResizeObserver(updateLayout).observe($('topbar'));
 updateLayout();
 setTimeout(() => toast('Walk through the 4 steps, then switch to Room scan'), 2600);
@@ -1689,7 +1630,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('test')) {
     cast(ox,oy,oz,dx,dy,dz,exclude=99) { return castAll(ox,oy,oz,dx,dy,dz,exclude) ? {...HIT, source: HIT.source?.label || null} : null; },
     snapshot(includePoints = false) { return {count, status:scanStatus, running:!!job, regActive, pendingRegGame,
       prCount, prPoints:includePoints ? Array.from(prPosA.subarray(0,prCount*3)) : [], counts:[...stCounts],
-      shared:lastShared, regOff:{...regOff}, points:includePoints ? Array.from(pPos.subarray(0,Math.min(count,200000)*3)) : [],
+      shared:lastShared, targetPairs, networkConnected, chainStage, regStation, points:includePoints ? Array.from(pPos.subarray(0,Math.min(count,200000)*3)) : [],
       memory:{...renderer.info.memory}}; }
   };
 }

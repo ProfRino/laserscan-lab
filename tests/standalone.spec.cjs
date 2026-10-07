@@ -40,10 +40,13 @@ for(const name of ['res','noise','occl','place','reg','corridor']){
     await room(page);await page.locator('[data-l='+name+']').click();
     await expect(page.locator('#scanStatus')).toHaveText('Complete',{timeout:65000});
     if(name==='corridor'){
-      await expect(page.locator('#regPad')).toBeVisible({timeout:45000});
-      await page.locator('#regAuto').click();
-      await expect(page.locator('#regErr')).toContainText('Registered',{timeout:15000});
-      await page.locator('#regDone').click();await expect(page.locator('#regPad')).toBeHidden();
+      for (const stage of ['Left room','Corridor','Right room']) {
+        await expect(page.locator('#regTitle')).toContainText(stage,{timeout:45000});
+        await expect(page.locator('#regPad')).toBeVisible();
+        await page.locator('#regDone').click();
+      }
+      await expect(page.locator('#lTitle')).toContainText('Survey complete');
+      await expect(page.locator('#hudLinks')).toContainText('connect all');
     }else await expect(page.locator('#lessonCard')).toBeVisible();
   });
 }
