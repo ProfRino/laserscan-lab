@@ -1,6 +1,6 @@
 # LaserScan Lab
 
-[![Validate](https://github.com/ProfRino/laserscan-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/ProfRino/laserscan-lab/actions/workflows/ci.yml)
+[![Validate](https://github.com/ProfRino/laserscan-lab/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ProfRino/laserscan-lab/actions/workflows/ci.yml)
 [![Offline application](https://img.shields.io/badge/Offline-single%20HTML%20file-1f5b96)](https://github.com/ProfRino/laserscan-lab/releases/latest/download/LaserScan-Lab.html)
 
 Explore laser scanning, point clouds, occlusion and multi-room surveys in your browser.
