@@ -1,0 +1,10 @@
+node_modules/
+dist/
+test-results/
+test-results-*/
+playwright-report/
+*.mp4
+.DS_Store
+Thumbs.db
+laserscan-lab-3.html
+LaserScan-Lab-v*.html

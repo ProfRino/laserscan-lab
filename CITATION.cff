@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "LaserScan Lab"
+type: software
+authors:
+  - family-names: "Lovreglio"
+    given-names: "Ruggiero"
+    affiliation: "Massey University"
+repository-code: "https://github.com/ProfRino/laserscan-lab"
+abstract: "An offline browser-based training simulator for terrestrial laser scanning, point-cloud sampling, occlusion, scanner placement and guided registration."
